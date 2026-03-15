@@ -1,0 +1,9 @@
+{
+  "name": "Compact Launcher",
+  "description": "Compact popup launcher for GNOME Shell",
+  "uuid": "compact-launcher@gilsonf",
+  "settings-schema": "org.gnome.shell.extensions.compact-launcher",
+  "shell-version": ["47", "48", "49"],
+  "version": 1,
+  "url": ""
+}

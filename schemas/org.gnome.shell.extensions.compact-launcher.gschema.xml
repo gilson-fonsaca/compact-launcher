@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.compact-launcher"
+          path="/org/gnome/shell/extensions/compact-launcher/">
+
+    <!-- ── Animation ──────────────────────────────────────────────────────── -->
+
+    <key name="animation-time" type="i">
+      <default>180</default>
+      <summary>Animation duration (ms)</summary>
+      <description>Duration in milliseconds of the popup open/close animation.</description>
+      <range min="0" max="1000"/>
+    </key>
+
+    <!-- ── App icon tiles ─────────────────────────────────────────────────── -->
+
+    <key name="icon-size" type="i">
+      <default>64</default>
+      <summary>App icon size (px)</summary>
+      <description>Size in pixels of the icon image inside each tile.</description>
+      <range min="16" max="128"/>
+    </key>
+
+    <key name="cell-width" type="i">
+      <default>104</default>
+      <summary>Tile width (px)</summary>
+      <description>Fixed width of each grid cell (icon + label). Must be larger than icon-size.</description>
+      <range min="48" max="256"/>
+    </key>
+
+    <key name="cell-height" type="i">
+      <default>112</default>
+      <summary>Tile height (px)</summary>
+      <description>Minimum height of each grid cell (icon + label).</description>
+      <range min="48" max="256"/>
+    </key>
+
+    <!-- ── Grid spacing ───────────────────────────────────────────────────── -->
+
+    <key name="col-spacing" type="i">
+      <default>0</default>
+      <summary>Horizontal spacing between tiles (px)</summary>
+      <description>Horizontal gap in pixels between icon columns.</description>
+      <range min="0" max="64"/>
+    </key>
+
+    <key name="row-spacing" type="i">
+      <default>0</default>
+      <summary>Vertical spacing between tiles (px)</summary>
+      <description>Vertical gap in pixels between icon rows.</description>
+      <range min="0" max="64"/>
+    </key>
+
+    <!-- ── Dock icon ───────────────────────────────────────────────────────── -->
+
+    <key name="dock-icon-size" type="i">
+      <default>48</default>
+      <summary>Dock icon size (px)</summary>
+      <description>Fallback size of the extension icon in the dock. The dock may override this value at runtime.</description>
+      <range min="16" max="96"/>
+    </key>
+
+    <!-- ── Popup dimensions ───────────────────────────────────────────────── -->
+
+    <key name="popup-width" type="i">
+      <default>960</default>
+      <summary>Popup width (px)</summary>
+      <description>Popup width in pixels.</description>
+      <range min="200" max="3840"/>
+    </key>
+
+    <key name="popup-height" type="i">
+      <default>864</default>
+      <summary>Max popup height (px)</summary>
+      <description>Maximum popup height in pixels. The actual height may be smaller if the bottom-fraction gap is reached first.</description>
+      <range min="200" max="2160"/>
+    </key>
+
+    <key name="grid-margin-px" type="i">
+      <default>20</default>
+      <summary>Grid inset (px)</summary>
+      <description>Pixel inset subtracted from the popup width and height when calculating the icon grid area, preventing overflow at the borders and scrollbar.</description>
+      <range min="0" max="120"/>
+    </key>
+
+    <!-- ── Popup position ─────────────────────────────────────────────────── -->
+
+    <key name="top-fraction" type="d">
+      <default>0.12</default>
+      <summary>Top gap (monitor fraction)</summary>
+      <description>Minimum distance from the top of the monitor. The popup is bottom-anchored; this prevents it from extending too far upward. e.g. 0.12 = 12%.</description>
+      <range min="0.0" max="0.5"/>
+    </key>
+
+    <key name="bottom-fraction" type="d">
+      <default>0.12</default>
+      <summary>Bottom gap (monitor fraction)</summary>
+      <description>Primary position anchor: the popup bottom edge is placed this far from the monitor bottom (above the dock). e.g. 0.12 = 12%.</description>
+      <range min="0.0" max="0.5"/>
+    </key>
+
+    <!-- ── Columns ────────────────────────────────────────────────────────── -->
+
+    <key name="min-cols" type="i">
+      <default>4</default>
+      <summary>Minimum number of columns</summary>
+      <description>Minimum number of icon columns in the grid, regardless of monitor size.</description>
+      <range min="1" max="20"/>
+    </key>
+
+    <key name="max-cols" type="i">
+      <default>0</default>
+      <summary>Maximum number of columns (0 = automatic)</summary>
+      <description>Caps the maximum number of columns. When 0, the count is calculated automatically based on monitor size.</description>
+      <range min="0" max="20"/>
+    </key>
+
+    <!-- ── Dock button ───────────────────────────────────────────────────── -->
+
+    <key name="hide-show-apps-button" type="b">
+      <default>true</default>
+      <summary>Hide the default "Show Applications" button</summary>
+      <description>When true, the dock's built-in "Show Applications" button is hidden so the Compact Launcher button is the only app launcher icon.</description>
+    </key>
+
+    <key name="dock-position" type="s">
+      <default>'left'</default>
+      <summary>Dock button position</summary>
+      <description>Position of the extension button in the dock: 'left' (first) or 'right' (last).</description>
+      <choices>
+        <choice value='left'/>
+        <choice value='right'/>
+      </choices>
+    </key>
+
+    <!-- ── Filters ────────────────────────────────────────────────────────── -->
+
+    <key name="hidden-apps" type="as">
+      <default>[]</default>
+      <summary>Hidden apps</summary>
+      <description>List of exact names or wildcard patterns (*) to hide from the grid. e.g. "Logs", "Libre*".</description>
+    </key>
+
+  </schema>
+</schemalist>

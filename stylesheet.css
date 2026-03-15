@@ -1,0 +1,130 @@
+/*
+ * Compact Launcher – stylesheet.css
+ *
+ * Design philosophy
+ * -----------------
+ * – Never hardcode colours. Background and text colours come from the
+ *   GNOME theme via the "popup-menu-content" class on the popup box.
+ * – Use .popup-menu-content.compact-launcher for overrides so that our
+ *   higher-specificity selector wins without touching any colour values.
+ * – Everything else (icon sizes, spacing, border-radius, animations) is
+ *   defined here.
+ */
+
+/* ── Popup box ────────────────────────────────────────────────────────────── */
+
+/*
+ * .popup-menu-content supplies the theme-aware background-color and
+ * foreground color automatically (dark / light).
+ * We only override geometry and decorative properties here.
+ */
+.popup-menu-content.compact-launcher {
+    border-radius: 20px;
+    padding: 16px;
+    spacing: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    /* Layered shadow: tight + diffuse */
+    box-shadow:
+        0 2px 8px  rgba(0, 0, 0, 0.25),
+        0 12px 48px rgba(0, 0, 0, 0.40);
+}
+
+/* ── Full-screen overlay (click-outside-to-close backdrop) ───────────────── */
+
+.compact-launcher-overlay {
+    background-color: rgba(0, 0, 0, 0.45);
+}
+
+/* Search field removed — launcher now shows all apps in a scroll-only grid */
+
+/* ── Scroll view ──────────────────────────────────────────────────────────── */
+
+.compact-launcher-scroll {
+    /* max-height is set dynamically in JS (75% of monitor height minus padding) */
+    padding: 4px 0 2px;
+}
+
+/* ── App grid container ───────────────────────────────────────────────────── */
+
+.compact-launcher-grid {
+    padding: 6px 4px;
+}
+
+/* ── Individual app icon tile ────────────────────────────────────────────────
+ *
+ * Each tile is an AppIcon (St.Button) that holds a vertical St.BoxLayout with
+ * an icon bin + label. We give every tile a fixed width so that
+ * Clutter.GridLayout produces a perfectly uniform grid.
+ *
+ * 6 columns × 104 px + gutter = ~624 px content area inside a 704 px popup.
+ */
+.compact-launcher-app-icon {
+    /* min-width / max-width / min-height are set via inline style in JS
+     * (CELL_WIDTH / CELL_HEIGHT constants) — do NOT redefine them here. */
+    padding: 10px 8px 8px;
+    border-radius: 12px;
+    /* Background transition for hover highlight */
+    transition-duration: 120ms;
+    transition-timing-function: ease-out;
+}
+
+.compact-launcher-app-icon:hover,
+.compact-launcher-app-icon:focus {
+    background-color: rgba(128, 128, 128, 0.18);
+}
+
+.compact-launcher-app-icon:active {
+    background-color: rgba(128, 128, 128, 0.30);
+}
+
+/* ── App name label ───────────────────────────────────────────────────────── */
+
+.compact-launcher-app-label {
+    font-size: 0.82em;
+    text-align: center;
+    padding-top: 5px;
+    /* Width is already capped by the tile (CELL_WIDTH). The label must not
+     * exceed 2 lines so no grid row becomes excessively tall; overflow is
+     * handled by Pango's ellipsize-at-end fallback set in JS. */
+    max-width: 96px;
+    max-height: 2.8em;   /* ~2 lines at 0.82em; keeps rows uniform */
+    /* colour intentionally omitted – inherits from popup-menu-content */
+}
+
+
+/* ── Panel button ─────────────────────────────────────────────────────────── */
+
+/*
+ * "panel-button" already defines all necessary panel styling.
+ * We only add a tiny left-margin so it doesn't overlap the Activities button.
+ */
+.compact-launcher-panel-btn {
+    margin-left: 2px;
+}
+
+/* ── Dash integration ─────────────────────────────────────────────────────── */
+
+/*
+ * The dash button container matches the sizing of a DashItemContainer.
+ * "app-well-app" on the inner St.Button already provides hover / focus
+ * states that match the rest of the dash icons.
+ */
+.compact-launcher-dash-item {
+    /* Let the dash box determine height */
+}
+
+.compact-launcher-dash-btn {
+    /* Matches app-well-app baseline – no overrides needed */
+}
+
+/*
+ * The icon inside the dash button.
+ * We rely on the dash to set the correct icon-size at runtime, but provide
+ * a sensible fallback.  The "overview-icon" wrapper class handles scaling.
+ */
+.compact-launcher-dash-icon {
+    /* icon-size is set via icon_size property in JS (DOCK_ICON_SIZE constant).
+     * This rule is kept only as a CSS fallback in case the JS property is
+     * not applied; do NOT change this value without updating DOCK_ICON_SIZE. */
+    icon-size: 48px;
+}
