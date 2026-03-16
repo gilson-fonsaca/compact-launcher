@@ -44,7 +44,7 @@ of all your installed applications — no search bar, just scroll and click to l
 ### Using the install script (recommended)
 
 ```bash
-git clone https://github.com/gilsonf/compact_launcher.git
+git clone https://github.com/gilson-fonsaca/compact-launcher.git
 cd compact_launcher
 bash install.sh
 ```

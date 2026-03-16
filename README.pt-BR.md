@@ -44,7 +44,7 @@ aplicativos instalados — sem barra de pesquisa, basta rolar e clicar para abri
 ### Usando o script de instalação (recomendado)
 
 ```bash
-git clone https://github.com/gilsonf/compact_launcher.git
+git clone https://github.com/gilson-fonsaca/compact-launcher.git
 cd compact_launcher
 bash install.sh
 ```

@@ -7,6 +7,7 @@
 
 import Adw from 'gi://Adw';
 import Gtk from 'gi://Gtk';
+import Gio from 'gi://Gio';
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
 export default class CompactLauncherPreferences extends ExtensionPreferences {
@@ -208,6 +209,15 @@ export default class CompactLauncherPreferences extends ExtensionPreferences {
         window.add(filtersPage);
 
         _buildHiddenAppsSection(filtersPage, settings);
+
+        // ── Page: Donate ──────────────────────────────────────────────────────
+        const donatePage = new Adw.PreferencesPage({
+            title: _('Support'),
+            icon_name: 'emblem-favorite-symbolic',
+        });
+        window.add(donatePage);
+
+        _buildDonatePage(donatePage);
     }
 }
 
@@ -361,6 +371,106 @@ function _buildHiddenAppsSection(page, settings) {
 
     syncRows();
     settings.connect('changed::hidden-apps', syncRows);
+}
+
+/**
+ * Builds the donation page using an Adw.StatusPage as the centrepiece.
+ * The "Buy me a coffee" button opens buymeacoffee.com/Gilsonf in the
+ * default browser via Gio.AppInfo.launch_default_for_uri().
+ */
+function _buildDonatePage(page) {
+    const DONATE_URL = 'https://www.buymeacoffee.com/Gilsonf';
+
+    // ── Status page (hero area) ───────────────────────────────────────────────
+    const status = new Adw.StatusPage({
+        title: _('Support Compact Launcher'),
+        description: _(
+            'Compact Launcher is free and open source, built and\n' +
+            'maintained in spare time. If it has made your GNOME\n' +
+            'desktop a little better, a coffee goes a long way! ☕'
+        ),
+        icon_name: 'emblem-favorite-symbolic',
+        vexpand: true,
+    });
+
+    // ── Donate button ─────────────────────────────────────────────────────────
+    const donateBtn = new Gtk.Button({
+        label: _('☕  Buy me a coffee'),
+        halign: Gtk.Align.CENTER,
+        css_classes: ['suggested-action', 'pill'],
+        margin_top: 8,
+    });
+    donateBtn.connect('clicked', () => {
+        try {
+            Gio.AppInfo.launch_default_for_uri(DONATE_URL, null);
+        } catch (e) {
+            logError(e, '[CompactLauncher] Could not open donation URL');
+        }
+    });
+
+    // ── "No pressure" note ────────────────────────────────────────────────────
+    const noteLabel = new Gtk.Label({
+        label: _('No account needed · Secure payment via Buy Me a Coffee'),
+        halign: Gtk.Align.CENTER,
+        margin_top: 12,
+        css_classes: ['dim-label', 'caption'],
+    });
+
+    // Wrap in a box and attach to the status page child slot
+    const box = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 0,
+        halign: Gtk.Align.CENTER,
+    });
+    box.append(donateBtn);
+    box.append(noteLabel);
+    status.set_child(box);
+
+    // ── Group: other ways to help ─────────────────────────────────────────────
+    const helpGroup = new Adw.PreferencesGroup({
+        title: _('Other ways to help'),
+        margin_top: 0,
+    });
+
+    const githubRow = new Adw.ActionRow({
+        title: _('Star the project on GitHub'),
+        subtitle: _('Visibility helps the extension reach more users.'),
+        activatable: true,
+    });
+    githubRow.add_suffix(new Gtk.Image({icon_name: 'go-next-symbolic'}));
+    githubRow.connect('activated', () => {
+        try {
+            Gio.AppInfo.launch_default_for_uri(
+                'https://github.com/gilson-fonsaca/compact-launcher', null);
+        } catch (e) {}
+    });
+
+    const bugRow = new Adw.ActionRow({
+        title: _('Report a bug or suggest a feature'),
+        subtitle: _('Open an issue on the GitHub repository.'),
+        activatable: true,
+    });
+    bugRow.add_suffix(new Gtk.Image({icon_name: 'go-next-symbolic'}));
+    bugRow.connect('activated', () => {
+        try {
+            Gio.AppInfo.launch_default_for_uri(
+                'https://github.com/gilson-fonsaca/compact-launcher/issues', null);
+        } catch (e) {}
+    });
+
+    helpGroup.add(githubRow);
+    helpGroup.add(bugRow);
+
+    // ── Layout: status page + help group inside a scrollable preferences page ─
+    // Adw.PreferencesPage uses a Gtk.ScrolledWindow internally, so we add a
+    // wrapping group that contains the status page as a custom widget.
+    const heroGroup = new Adw.PreferencesGroup();
+
+    // Adw.PreferencesGroup.add() expects a Gtk.Widget; StatusPage qualifies.
+    heroGroup.add(status);
+
+    page.add(heroGroup);
+    page.add(helpGroup);
 }
 
 /**
