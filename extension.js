@@ -150,10 +150,13 @@ class CompactLauncherPopup {
         this._isOpen            = false;
         this._keyPressId        = null;
         this._appIcons          = [];
+        this._iconConnections   = [];
         this._focusIndex        = -1;
         this._appsLoaded        = false;
         this._appSystemId       = null;
         this._settingsChangedId = null;
+        this._overlayPressId    = null;
+        this._popupPressId      = null;
         this._currentAppsPerRow = 6;   // default; recalculated on open()
 
         this._buildUI();
@@ -169,9 +172,9 @@ class CompactLauncherPopup {
         // a full icon rebuild on next open() for size-related changes.
         this._settingsChangedId = this._settings.connect('changed', (_s, key) => {
             if (key === 'col-spacing')
-                this._gridLayout.column_spacing = this._settings.get_int('col-spacing');
+                this._gridBox.layout_manager.column_spacing = this._settings.get_int('col-spacing');
             else if (key === 'row-spacing')
-                this._gridLayout.row_spacing = this._settings.get_int('row-spacing');
+                this._gridBox.layout_manager.row_spacing = this._settings.get_int('row-spacing');
             else
                 this._appsLoaded = false;  // force rebuild on next open()
         });
@@ -190,7 +193,7 @@ class CompactLauncherPopup {
             reactive: false,
             style_class: 'compact-launcher-overlay',
         });
-        this._overlay.connect('button-press-event', () => {
+        this._overlayPressId = this._overlay.connect('button-press-event', () => {
             this.close();
             return Clutter.EVENT_STOP;
         });
@@ -206,7 +209,7 @@ class CompactLauncherPopup {
             // width set dynamically in open() based on monitor size
         });
         // Prevent clicks inside the popup from propagating to the overlay
-        this._popup.connect('button-press-event', () => Clutter.EVENT_STOP);
+        this._popupPressId = this._popup.connect('button-press-event', () => Clutter.EVENT_STOP);
 
         // ── Scroll view ───────────────────────────────────────────────────────
         this._scrollView = new St.ScrollView({
@@ -218,14 +221,13 @@ class CompactLauncherPopup {
         this._popup.add_child(this._scrollView);
 
         // ── Grid ──────────────────────────────────────────────────────────────
-        this._gridLayout = new Clutter.GridLayout({
-            orientation: Clutter.Orientation.HORIZONTAL,
-            column_spacing: this._settings.get_int('col-spacing'),
-            row_spacing:    this._settings.get_int('row-spacing'),
-        });
         this._gridBox = new St.Widget({
             style_class: 'compact-launcher-grid',
-            layout_manager: this._gridLayout,
+            layout_manager: new Clutter.GridLayout({
+                orientation: Clutter.Orientation.HORIZONTAL,
+                column_spacing: this._settings.get_int('col-spacing'),
+                row_spacing:    this._settings.get_int('row-spacing'),
+            }),
             x_expand: true,
         });
 
@@ -240,7 +242,18 @@ class CompactLauncherPopup {
 
     // ── App loading ───────────────────────────────────────────────────────────
 
+    _disconnectIconSignals() {
+        for (const {icon, pressId, focusId} of this._iconConnections) {
+            try {
+                icon.disconnect(pressId);
+                icon.disconnect(focusId);
+            } catch (_e) {}
+        }
+        this._iconConnections = [];
+    }
+
     _loadApps() {
+        this._disconnectIconSignals();
         this._gridBox.remove_all_children();
         this._appIcons  = [];
         this._focusIndex = -1;
@@ -282,15 +295,16 @@ class CompactLauncherPopup {
                 const icon = new AppIcon(info, iconSize, cellWidth, cellHeight);
                 // button-press-event fires instantly and reliably; 'clicked'
                 // (which needs press+release) can be blocked by parent containers.
-                icon.connect('button-press-event', (_a, ev) => {
+                const pressId = icon.connect('button-press-event', (_a, ev) => {
                     if (ev.get_button() === 1) {
                         this._launchApp(info);
                         return Clutter.EVENT_STOP;
                     }
                     return Clutter.EVENT_PROPAGATE;
                 });
-                icon.connect('key-focus-in', () => { this._focusIndex = i; });
-                this._gridLayout.attach(icon, i % cols, Math.floor(i / cols), 1, 1);
+                const focusId = icon.connect('key-focus-in', () => { this._focusIndex = i; });
+                this._iconConnections.push({icon, pressId, focusId});
+                this._gridBox.layout_manager.attach(icon, i % cols, Math.floor(i / cols), 1, 1);
                 this._appIcons.push(icon);
             });
         } catch (e) {
@@ -318,7 +332,7 @@ class CompactLauncherPopup {
         // Remove all children and re-attach with new column count
         this._gridBox.remove_all_children();
         this._appIcons.forEach((icon, i) => {
-            this._gridLayout.attach(icon, i % appsPerRow, Math.floor(i / appsPerRow), 1, 1);
+            this._gridBox.layout_manager.attach(icon, i % appsPerRow, Math.floor(i / appsPerRow), 1, 1);
         });
     }
 
@@ -557,12 +571,36 @@ class CompactLauncherPopup {
             global.stage.disconnect(this._keyPressId);
             this._keyPressId = null;
         }
+
+        // Disconnect icon signals before the grid is torn down
+        this._disconnectIconSignals();
+
+        // Disconnect signals on top-level widgets before destroying them
+        if (this._overlayPressId !== null) {
+            this._overlay.disconnect(this._overlayPressId);
+            this._overlayPressId = null;
+        }
+        if (this._popupPressId !== null) {
+            this._popup.disconnect(this._popupPressId);
+            this._popupPressId = null;
+        }
+
         this._popup.remove_all_transitions();
         this._overlay.remove_all_transitions();
         this._popup.get_parent()?.remove_child(this._popup);
         this._overlay.get_parent()?.remove_child(this._overlay);
+
+        // Destroy widget tree innermost-first to avoid double-destroy
+        this._gridBox.destroy();
+        this._gridBox = null;
+        this._gridViewport.destroy();
+        this._gridViewport = null;
+        this._scrollView.destroy();
+        this._scrollView = null;
         this._popup.destroy();
+        this._popup = null;
         this._overlay.destroy();
+        this._overlay = null;
     }
 }
 
@@ -574,7 +612,8 @@ class CompactLauncherPopup {
 class PanelLauncherButton {
 
     constructor(launcher) {
-        this._launcher = launcher;
+        this._launcher  = launcher;
+        this._clickedId = null;
         this._button = new St.Button({
             style_class: 'panel-button compact-launcher-panel-btn',
             reactive: true,
@@ -585,7 +624,7 @@ class PanelLauncherButton {
                 style_class: 'system-status-icon',
             }),
         });
-        this._button.connect('clicked', () => this._launcher.toggle());
+        this._clickedId = this._button.connect('clicked', () => this._launcher.toggle());
     }
 
     addToPanel() {
@@ -593,8 +632,13 @@ class PanelLauncherButton {
     }
 
     destroy() {
+        if (this._clickedId !== null) {
+            this._button.disconnect(this._clickedId);
+            this._clickedId = null;
+        }
         this._button.get_parent()?.remove_child(this._button);
         this._button.destroy();
+        this._button = null;
     }
 }
 
