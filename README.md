@@ -7,7 +7,13 @@ of all your installed applications — no search bar, just scroll and click to l
 ![GNOME Shell 47+](https://img.shields.io/badge/GNOME%20Shell-47%2B-blue)
 ![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)
 
-> 📖 [Leia em Português do Brasil](README.pt-BR.md)
+---
+
+## Support
+
+If this extension helps you, consider buying me a coffee:
+
+[![Buy Me a Coffee](https://www.buymeacoffee.com/assets/img/custom_images/yellow_img.png)](https://www.buymeacoffee.com/Gilsonf)
 
 ---
 
