@@ -13,7 +13,7 @@ import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Ex
 export default class CompactLauncherPreferences extends ExtensionPreferences {
 
     fillPreferencesWindow(window) {
-        const settings = this.getSettings('org.gnome.shell.extensions.compact-launcher');
+        const settings = this.getSettings();
 
         window.set_default_size(620, 720);
         window.set_title(_('Compact Launcher'));
@@ -404,7 +404,7 @@ function _buildDonatePage(page) {
         try {
             Gio.AppInfo.launch_default_for_uri(DONATE_URL, null);
         } catch (e) {
-            logError(e, '[CompactLauncher] Could not open donation URL');
+            console.error('[CompactLauncher] Could not open donation URL', e);
         }
     });
 
