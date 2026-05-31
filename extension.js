@@ -116,14 +116,14 @@ class CompactLauncherAppIcon extends St.Button {
         box.add_child(label);
 
         // ── Hover zoom ────────────────────────────────────────────────────────
-        this.connect('notify::hover', () => {
+        this.connectObject('notify::hover', () => {
             this.ease({
                 scale_x: this.hover ? 1.13 : 1.0,
                 scale_y: this.hover ? 1.13 : 1.0,
                 duration: 120,
                 mode: Clutter.AnimationMode.EASE_OUT_QUAD,
             });
-        });
+        }, this);
     }
 });
 
@@ -148,36 +148,31 @@ class CompactLauncherPopup {
     constructor(settings) {
         this._settings          = settings;
         this._isOpen            = false;
-        this._keyPressId        = null;
         this._appIcons          = [];
-        this._iconConnections   = [];
         this._focusIndex        = -1;
         this._appsLoaded        = false;
-        this._appSystemId       = null;
-        this._settingsChangedId = null;
-        this._overlayPressId    = null;
-        this._popupPressId      = null;
+        this._openTimeoutId     = null;
         this._currentAppsPerRow = 6;   // default; recalculated on open()
 
         this._buildUI();
 
         // Reload the grid whenever apps are installed or uninstalled.
         const appSystem = Shell.AppSystem.get_default();
-        this._appSystemId = appSystem.connect('installed-changed', () => {
+        appSystem.connectObject('installed-changed', () => {
             this._appsLoaded = false;
             this._loadApps();
-        });
+        }, this);
 
         // React to settings changes: update spacing immediately and force
         // a full icon rebuild on next open() for size-related changes.
-        this._settingsChangedId = this._settings.connect('changed', (_s, key) => {
+        this._settings.connectObject('changed', (_s, key) => {
             if (key === 'col-spacing')
                 this._gridBox.layout_manager.column_spacing = this._settings.get_int('col-spacing');
             else if (key === 'row-spacing')
                 this._gridBox.layout_manager.row_spacing = this._settings.get_int('row-spacing');
             else
                 this._appsLoaded = false;  // force rebuild on next open()
-        });
+        }, this);
 
         // Gio.AppInfo.get_all() is ready immediately — no timing issues.
         this._loadApps();
@@ -193,10 +188,10 @@ class CompactLauncherPopup {
             reactive: false,
             style_class: 'compact-launcher-overlay',
         });
-        this._overlayPressId = this._overlay.connect('button-press-event', () => {
+        this._overlay.connectObject('button-press-event', () => {
             this.close();
             return Clutter.EVENT_STOP;
-        });
+        }, this);
 
         // ── Popup box ─────────────────────────────────────────────────────────
         // popup-menu-content provides a theme-aware background automatically.
@@ -209,7 +204,7 @@ class CompactLauncherPopup {
             // width set dynamically in open() based on monitor size
         });
         // Prevent clicks inside the popup from propagating to the overlay
-        this._popupPressId = this._popup.connect('button-press-event', () => Clutter.EVENT_STOP);
+        this._popup.connectObject('button-press-event', () => Clutter.EVENT_STOP, this);
 
         // ── Scroll view ───────────────────────────────────────────────────────
         this._scrollView = new St.ScrollView({
@@ -243,13 +238,10 @@ class CompactLauncherPopup {
     // ── App loading ───────────────────────────────────────────────────────────
 
     _disconnectIconSignals() {
-        for (const {icon, pressId, focusId} of this._iconConnections) {
-            try {
-                icon.disconnect(pressId);
-                icon.disconnect(focusId);
-            } catch (_e) {}
+        for (const icon of this._appIcons) {
+            icon.disconnectObject(this);
         }
-        this._iconConnections = [];
+        this._appIcons = [];
     }
 
     _loadApps() {
@@ -262,7 +254,7 @@ class CompactLauncherPopup {
             // Gio.AppInfo.get_all() returns GDesktopAppInfo objects directly —
             // no Shell.AppSystem timing issues, names/icons are always available.
             const raw = Gio.AppInfo.get_all();
-            log(`[CompactLauncher] Gio.AppInfo.get_all() = ${raw.length} apps`);
+            console.debug(`[CompactLauncher] Gio.AppInfo.get_all() = ${raw.length} apps`);
 
             const hiddenPatterns = this._settings.get_strv('hidden-apps')
                 .map(p => p.trim()).filter(p => p.length > 0);
@@ -284,7 +276,7 @@ class CompactLauncherPopup {
                 .sort((a, b) =>
                     (a.get_name() ?? '').localeCompare(b.get_name() ?? ''));
 
-            log(`[CompactLauncher] after filter: ${apps.length} apps`);
+            console.debug(`[CompactLauncher] after filter: ${apps.length} apps`);
             this._appsLoaded = true;
 
             const cols       = this._currentAppsPerRow;
@@ -295,20 +287,19 @@ class CompactLauncherPopup {
                 const icon = new AppIcon(info, iconSize, cellWidth, cellHeight);
                 // button-press-event fires instantly and reliably; 'clicked'
                 // (which needs press+release) can be blocked by parent containers.
-                const pressId = icon.connect('button-press-event', (_a, ev) => {
+                icon.connectObject('button-press-event', (_a, ev) => {
                     if (ev.get_button() === 1) {
                         this._launchApp(info);
                         return Clutter.EVENT_STOP;
                     }
                     return Clutter.EVENT_PROPAGATE;
-                });
-                const focusId = icon.connect('key-focus-in', () => { this._focusIndex = i; });
-                this._iconConnections.push({icon, pressId, focusId});
+                }, this);
+                icon.connectObject('key-focus-in', () => { this._focusIndex = i; }, this);
                 this._gridBox.layout_manager.attach(icon, i % cols, Math.floor(i / cols), 1, 1);
                 this._appIcons.push(icon);
             });
         } catch (e) {
-            log(`[CompactLauncher] _loadApps error: ${e}`);
+            console.error(`[CompactLauncher] _loadApps error: ${e}`);
         }
     }
 
@@ -440,14 +431,14 @@ class CompactLauncherPopup {
         const rawCols    = Math.max(MIN_COLS, Math.floor(gridW / CELL_WIDTH) - 1);
         const appsPerRow = MAX_COLS > 0 ? Math.min(MAX_COLS, rawCols) : rawCols;
 
-        log(`[CompactLauncher] open() monitor=${monitor.index} popupW=${popupW} gridW=${gridW} appsPerRow=${appsPerRow} scrollMaxH=${scrollMaxH}`);
+        console.debug(`[CompactLauncher] open() monitor=${monitor.index} popupW=${popupW} gridW=${gridW} appsPerRow=${appsPerRow} scrollMaxH=${scrollMaxH}`);
 
         try {
             this._popup.set_width(popupW);
             this._scrollView.set_style(`max-height: ${scrollMaxH - 32}px;`);
             this._relayoutApps(appsPerRow);
         } catch (e) {
-            log(`[CompactLauncher] open() layout error: ${e}`);
+            console.error(`[CompactLauncher] open() layout error: ${e}`);
         }
 
         // Cover the entire stage (all monitors) so a click on any monitor
@@ -498,15 +489,20 @@ class CompactLauncherPopup {
             mode: Clutter.AnimationMode.EASE_OUT_QUAD,
         });
 
+        if (this._openTimeoutId) {
+            GLib.source_remove(this._openTimeoutId);
+            this._openTimeoutId = null;
+        }
+
         // Enable overlay click-to-close only after 150 ms so the button-press
         // that triggered open() cannot bubble through and close it instantly.
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => {
+        this._openTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => {
             if (this._isOpen) this._overlay.set_reactive(true);
+            this._openTimeoutId = null;
             return GLib.SOURCE_REMOVE;
         });
 
-        this._keyPressId = global.stage.connect(
-            'key-press-event', this._onKeyPress.bind(this));
+        global.stage.connectObject('key-press-event', this._onKeyPress.bind(this), this);
 
         // Give focus to the first icon after layout
         GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
@@ -522,13 +518,15 @@ class CompactLauncherPopup {
         if (!this._isOpen) return;
         this._isOpen = false;
 
+        if (this._openTimeoutId) {
+            GLib.source_remove(this._openTimeoutId);
+            this._openTimeoutId = null;
+        }
+
         // Disable overlay so it cannot fire a second close during the animation
         this._overlay.set_reactive(false);
 
-        if (this._keyPressId !== null) {
-            global.stage.disconnect(this._keyPressId);
-            this._keyPressId = null;
-        }
+        global.stage.disconnectObject(this);
 
         // ── Animate out ───────────────────────────────────────────────────────
         const animTime = this._settings.get_int('animation-time');
@@ -553,37 +551,26 @@ class CompactLauncherPopup {
     }
 
     toggle() {
-        log(`[CompactLauncher] toggle() isOpen=${this._isOpen}`);
+        console.debug(`[CompactLauncher] toggle() isOpen=${this._isOpen}`);
         if (this._isOpen) this.close();
         else              this.open();
     }
 
     destroy() {
-        if (this._settingsChangedId !== null) {
-            this._settings.disconnect(this._settingsChangedId);
-            this._settingsChangedId = null;
+        if (this._openTimeoutId) {
+            GLib.source_remove(this._openTimeoutId);
+            this._openTimeoutId = null;
         }
-        if (this._appSystemId !== null) {
-            Shell.AppSystem.get_default().disconnect(this._appSystemId);
-            this._appSystemId = null;
-        }
-        if (this._keyPressId !== null) {
-            global.stage.disconnect(this._keyPressId);
-            this._keyPressId = null;
-        }
+        this._settings.disconnectObject(this);
+        Shell.AppSystem.get_default().disconnectObject(this);
+        global.stage.disconnectObject(this);
 
         // Disconnect icon signals before the grid is torn down
         this._disconnectIconSignals();
 
         // Disconnect signals on top-level widgets before destroying them
-        if (this._overlayPressId !== null) {
-            this._overlay.disconnect(this._overlayPressId);
-            this._overlayPressId = null;
-        }
-        if (this._popupPressId !== null) {
-            this._popup.disconnect(this._popupPressId);
-            this._popupPressId = null;
-        }
+        this._overlay.disconnectObject(this);
+        this._popup.disconnectObject(this);
 
         this._popup.remove_all_transitions();
         this._overlay.remove_all_transitions();
@@ -613,7 +600,6 @@ class PanelLauncherButton {
 
     constructor(launcher) {
         this._launcher  = launcher;
-        this._clickedId = null;
         this._button = new St.Button({
             style_class: 'panel-button compact-launcher-panel-btn',
             reactive: true,
@@ -624,7 +610,7 @@ class PanelLauncherButton {
                 style_class: 'system-status-icon',
             }),
         });
-        this._clickedId = this._button.connect('clicked', () => this._launcher.toggle());
+        this._button.connectObject('clicked', () => this._launcher.toggle(), this);
     }
 
     addToPanel() {
@@ -632,10 +618,7 @@ class PanelLauncherButton {
     }
 
     destroy() {
-        if (this._clickedId !== null) {
-            this._button.disconnect(this._clickedId);
-            this._clickedId = null;
-        }
+        this._button.disconnectObject(this);
         this._button.get_parent()?.remove_child(this._button);
         this._button.destroy();
         this._button = null;
@@ -663,10 +646,10 @@ class DashLauncherButton {
         this._containers    = [];    // one St.Button per dock
         this._dashes        = [];    // parallel array: the DockDash for each container
         this._addedBoxes    = new Set(); // tracks boxes we already inserted into
-        this._retryTimerId  = 0;
+        this._retryTimerIds = [];
         this._tooltip       = null;
         this._tooltipTimer  = 0;
-        this._captureId     = null;
+        this._captureInstalled = false;
         this._contextMenu   = null;
         this._menuManager   = null;
         this._destroyed     = false;
@@ -700,16 +683,16 @@ class DashLauncherButton {
 
         // Primary handler: fires directly on the button before the dock sees it.
         // The captured-event below is a belt-and-suspenders fallback.
-        btn.connect('button-press-event', (_a, ev) => {
+        btn.connectObject('button-press-event', (_a, ev) => {
             if (ev.get_button() === 1) {
-                log('[CompactLauncher] dock btn direct press');
+                console.debug('[CompactLauncher] dock btn direct press');
                 this._launcher.toggle();
                 return Clutter.EVENT_STOP;
             }
             return Clutter.EVENT_PROPAGATE;
-        });
+        }, this);
 
-        btn.connect('notify::hover', () => {
+        btn.connectObject('notify::hover', () => {
             btn.ease({
                 scale_x: btn.hover ? 1.1 : 1.0,
                 scale_y: btn.hover ? 1.1 : 1.0,
@@ -718,7 +701,7 @@ class DashLauncherButton {
             });
             if (btn.hover) this._showTooltip(btn);
             else           this._hideTooltip();
-        });
+        }, this);
 
         return btn;
     }
@@ -776,15 +759,28 @@ class DashLauncherButton {
         // First attempt — some docks may not be ready yet at login
         this._insertIntoNewDocks();
 
+        this._clearRetryTimers();
+
         // Retry after ubuntu-dock finishes setting up all monitor docks
         // (typically < 3 s after the shell finishes initialising)
         const delays = [2000, 5000];
         delays.forEach(ms => {
-            GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
+            const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
+                this._retryTimerIds = this._retryTimerIds.filter(tId => tId !== id);
                 if (!this._destroyed) this._insertIntoNewDocks();
                 return GLib.SOURCE_REMOVE;
             });
+            this._retryTimerIds.push(id);
         });
+    }
+
+    _clearRetryTimers() {
+        if (this._retryTimerIds && this._retryTimerIds.length > 0) {
+            for (const id of this._retryTimerIds) {
+                GLib.source_remove(id);
+            }
+            this._retryTimerIds = [];
+        }
     }
 
     _insertIntoNewDocks() {
@@ -806,49 +802,44 @@ class DashLauncherButton {
                         this._dashes.push(dash);
                         this._addedBoxes.add(box);
                         addedNew = true;
-                        log(`[CompactLauncher] button inserted in dock ${idx}`);
+                        console.debug(`[CompactLauncher] button inserted in dock ${idx}`);
 
                         // Optionally hide the dock's built-in "Show Applications" button
                         if (this._settings.get_boolean('hide-show-apps-button'))
                             dash?.hideShowAppsButton?.();
                     } catch (e) {
-                        log(`[CompactLauncher] insert failed dock ${idx} — ${e}`);
+                        console.error(`[CompactLauncher] insert failed dock ${idx} — ${e}`);
                         btn.destroy();
                     }
                 });
 
-                if (addedNew && !this._captureId) {
-                    this._captureId = global.stage.connect(
-                        'captured-event', this._onCapturedEvent.bind(this));
-                    log('[CompactLauncher] captured-event handler installed');
+                if (addedNew && !this._captureInstalled) {
+                    global.stage.connectObject('captured-event', this._onCapturedEvent.bind(this), this);
+                    this._captureInstalled = true;
+                    console.debug('[CompactLauncher] captured-event handler installed');
                 }
             })
-            .catch(e => log(`[CompactLauncher] _insertIntoNewDocks error: ${e}`));
+            .catch(e => console.error(`[CompactLauncher] _insertIntoNewDocks error: ${e}`));
     }
 
-    /**
-     * Returns [{box, dash}] — one entry per monitor dock.
-     * Tries ubuntu-dock's DockManager first; falls back to Main.overview.dash.
-     */
     async _findDockEntries() {
         const entries = [];
 
         try {
             const dockExt = Main.extensionManager.lookup('ubuntu-dock@ubuntu.com');
-            if (dockExt) {
-                const mod = await import(`file://${dockExt.path}/extension.js`);
-                const dm  = mod.dockManager;
+            if (dockExt && dockExt.stateObj) {
+                const dm = dockExt.stateObj.dockManager ?? dockExt.stateObj._dockManager;
                 if (dm?._allDocks?.length) {
                     for (const dock of dm._allDocks) {
                         const dash = dock.dash;
                         const box  = dash?._box;
                         if (box) entries.push({box, dash});
                     }
-                    log(`[CompactLauncher] found ${entries.length} ubuntu-dock entries`);
+                    console.debug(`[CompactLauncher] found ${entries.length} ubuntu-dock entries`);
                 }
             }
         } catch (e) {
-            log(`[CompactLauncher] ubuntu-dock import failed: ${e}`);
+            console.error(`[CompactLauncher] ubuntu-dock check failed: ${e}`);
         }
 
         // Fallback: GNOME's built-in dash
@@ -876,7 +867,7 @@ class DashLauncherButton {
             let actor = event.get_source();
             while (actor) {
                 if (this._containers.includes(actor)) {
-                    log(`[CompactLauncher] captured btn${mouseBtn} on dock icon`);
+                    console.debug(`[CompactLauncher] captured btn${mouseBtn} on dock icon`);
                     if (mouseBtn === 1) {
                         this._launcher.toggle();
                         return Clutter.EVENT_STOP;
@@ -890,7 +881,7 @@ class DashLauncherButton {
                 actor = actor.get_parent?.() ?? null;
             }
         } catch (e) {
-            log(`[CompactLauncher] captured-event error: ${e}`);
+            console.error(`[CompactLauncher] captured-event error: ${e}`);
         }
 
         return Clutter.EVENT_PROPAGATE;
@@ -898,6 +889,7 @@ class DashLauncherButton {
 
     destroy() {
         this._destroyed = true;
+        this._clearRetryTimers();
         this._addedBoxes.clear();
 
         // Restore the stock "Show Applications" button on every dock
@@ -907,9 +899,9 @@ class DashLauncherButton {
         }
         this._dashes = [];
 
-        if (this._captureId !== null) {
-            global.stage.disconnect(this._captureId);
-            this._captureId = null;
+        if (this._captureInstalled) {
+            global.stage.disconnectObject(this);
+            this._captureInstalled = false;
         }
 
         this._hideTooltip();
@@ -929,6 +921,7 @@ class DashLauncherButton {
         }
 
         for (const btn of this._containers) {
+            btn.disconnectObject(this);
             try { btn.get_parent()?.remove_child(btn); } catch (_e) {}
             btn.destroy();
         }
@@ -941,7 +934,7 @@ class DashLauncherButton {
 export default class CompactLauncherExtension extends Extension {
 
     enable() {
-        const settings = this.getSettings('org.gnome.shell.extensions.compact-launcher');
+        const settings = this.getSettings();
 
         this._launcher   = new CompactLauncherPopup(settings);
         this._dashButton = new DashLauncherButton(this._launcher, settings);
