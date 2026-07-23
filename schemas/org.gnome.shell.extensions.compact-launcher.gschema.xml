@@ -141,5 +141,13 @@
       <description>List of exact names or wildcard patterns (*) to hide from the grid. e.g. "Logs", "Libre*".</description>
     </key>
 
+    <!-- ── Keyboard shortcut ──────────────────────────────────────────────── -->
+
+    <key name="toggle-launcher" type="as">
+      <default>[]</default>
+      <summary>Keyboard shortcut to open the launcher</summary>
+      <description>Global keyboard shortcut that toggles the Compact Launcher popup. Empty = disabled.</description>
+    </key>
+
   </schema>
 </schemalist>

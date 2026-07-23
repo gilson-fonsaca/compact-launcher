@@ -7,6 +7,7 @@
 
 import Adw from 'gi://Adw';
 import Gtk from 'gi://Gtk';
+import Gdk from 'gi://Gdk';
 import Gio from 'gi://Gio';
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
@@ -184,6 +185,19 @@ export default class CompactLauncherPreferences extends ExtensionPreferences {
             settings, 'max-cols', 0, 20, 1
         ));
 
+        // Group: Keyboard shortcut
+        const shortcutGroup = new Adw.PreferencesGroup({
+            title: _('Keyboard Shortcut'),
+            description: _('Global shortcut to open and close the launcher.'),
+        });
+        layoutPage.add(shortcutGroup);
+
+        shortcutGroup.add(_makeShortcutRow(
+            _('Open launcher'),
+            _('Press "Set", then the key combination. Backspace clears it.'),
+            settings, 'toggle-launcher'
+        ));
+
         // Reset button
         const resetGroup = new Adw.PreferencesGroup();
         layoutPage.add(resetGroup);
@@ -299,6 +313,84 @@ function _makeDoubleSpinRow(title, subtitle, settings, key, min, max, step) {
     });
     settings.bind(key, row, 'value', 0 /* GET | SET */);
     return row;
+}
+
+/**
+ * Creates an Adw.ActionRow that displays and captures a keyboard shortcut
+ * stored in an 'as' GSettings key (GNOME keybindings are string arrays).
+ */
+function _makeShortcutRow(title, subtitle, settings, key) {
+    const row = new Adw.ActionRow({title, subtitle});
+
+    const shortcutLabel = new Gtk.ShortcutLabel({
+        valign: Gtk.Align.CENTER,
+        disabled_text: _('Disabled'),
+    });
+
+    const syncLabel = () => {
+        const val = settings.get_strv(key);
+        shortcutLabel.set_accelerator(val.length > 0 ? val[0] : '');
+    };
+    syncLabel();
+    settings.connect(`changed::${key}`, syncLabel);
+
+    const setBtn = new Gtk.Button({
+        label: _('Set'),
+        valign: Gtk.Align.CENTER,
+    });
+    setBtn.connect('clicked', () => _captureShortcut(row, settings, key));
+
+    row.add_suffix(shortcutLabel);
+    row.add_suffix(setBtn);
+    return row;
+}
+
+/**
+ * Opens a modal dialog that captures the next key combination and stores it.
+ * Escape cancels; Backspace clears the shortcut.
+ */
+function _captureShortcut(parentRow, settings, key) {
+    const dialog = new Adw.Window({
+        modal: true,
+        transient_for: parentRow.get_root(),
+        default_width: 420,
+        default_height: 180,
+    });
+
+    const status = new Adw.StatusPage({
+        title: _('Set Shortcut'),
+        description: _('Press the desired combination.\nEsc to cancel · Backspace to clear.'),
+        icon_name: 'preferences-desktop-keyboard-shortcuts-symbolic',
+    });
+    dialog.set_content(status);
+
+    const controller = new Gtk.EventControllerKey();
+    controller.connect('key-pressed', (_c, keyval, keycode, state) => {
+        const mask = state & Gtk.accelerator_get_default_mod_mask();
+
+        if (keyval === Gdk.KEY_Escape && mask === 0) {
+            dialog.close();
+            return Gdk.EVENT_STOP;
+        }
+        if (keyval === Gdk.KEY_BackSpace && mask === 0) {
+            settings.set_strv(key, []);
+            dialog.close();
+            return Gdk.EVENT_STOP;
+        }
+
+        // Ignore presses of modifier keys on their own.
+        if (Gtk.accelerator_valid(keyval, mask)) {
+            const accel = Gtk.accelerator_name_with_keycode(null, keyval, keycode, mask);
+            settings.set_strv(key, [accel]);
+            dialog.close();
+            return Gdk.EVENT_STOP;
+        }
+
+        return Gdk.EVENT_STOP;
+    });
+    dialog.add_controller(controller);
+
+    dialog.present();
 }
 
 /**
@@ -487,6 +579,7 @@ function _resetToDefaults(settings) {
         'min-cols', 'max-cols',
         'hide-show-apps-button', 'dock-position',
         'hidden-apps',
+        'toggle-launcher',
     ];
     for (const key of keys)
         settings.reset(key);

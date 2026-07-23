@@ -16,6 +16,7 @@ import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
 import Graphene from 'gi://Graphene';
 import Pango from 'gi://Pango';
+import Meta from 'gi://Meta';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
@@ -939,9 +940,20 @@ export default class CompactLauncherExtension extends Extension {
         this._launcher   = new CompactLauncherPopup(settings);
         this._dashButton = new DashLauncherButton(this._launcher, settings);
         this._dashButton.addToDash();
+
+        // Global keyboard shortcut (empty by default; set via preferences).
+        Main.wm.addKeybinding(
+            'toggle-launcher',
+            settings,
+            Meta.KeyBindingFlags.NONE,
+            Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW,
+            () => this._launcher.toggle()
+        );
     }
 
     disable() {
+        Main.wm.removeKeybinding('toggle-launcher');
+
         this._dashButton?.destroy();
         this._dashButton = null;
 
